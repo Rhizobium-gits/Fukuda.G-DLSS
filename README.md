@@ -1,1 +1,0 @@
-# Fukuda.G-DLSS
