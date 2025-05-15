@@ -1,0 +1,817 @@
+<script>
+        let timer;
+        let targetTime = 0;
+        let startTime = 0;
+        let timerMode = '';
+        let isOvertime = false;
+        let isQAMode = false;
+        let animationFrameId;
+
+        function startTimer(mode, seconds) {
+            document.getElementById('homeScreen').style.display = 'none';
+            document.getElementById('timerScreen').style.display = 'block';
+            document.getElementById('timerButtons').innerHTML = '';
+            document.getElementById('overtime').textContent = '';
+            document.getElementById('overtime').style.display = 'none';
+            document.getElementById('breakWarning').style.display = 'none';
+            document.getElementById('breakWarning').classList.remove('explode-animation');
+            
+            // Reset variables
+            clearInterval(timer);
+            cancelAnimationFrame(animationFrameId);
+            startTime = Math.floor(Date.now() / 1000);
+            targetTime = startTime + seconds;
+            timerMode = mode;
+            isOvertime = false;
+            isQAMode = false;
+            
+            // Set appropriate title and indicator
+            document.getElementById('timerProgress').style.transform = 'scaleX(1)';
+            
+            if (mode === 'presentation') {
+                document.getElementById('timerTitle').textContent = '発表';
+                document.getElementById('indicator').className = 'indicator blink-orange';
+                document.getElementById('timerProgress').className = 'timer-progress';
+                
+                // Add buttons
+                const endButton = createButton('終了', 'end-btn', goHome);
+                endButton.innerHTML = '<i class="fas fa-home"></i> 終了';
+                
+                const qaButton = createButton('質疑応答に進む', 'qa-btn', startQASession);
+                qaButton.innerHTML = '<i class="fas fa-question-circle"></i> 質疑応答に進む';
+                
+                document.getElementById('timerButtons').appendChild(endButton);
+                document.getElementById('timerButtons').appendChild(qaButton);
+            } 
+            else if (mode === 'progress') {
+                document.getElementById('timerTitle').textContent = '進捗報告';
+                document.getElementById('indicator').className = 'indicator blink-green';
+                document.getElementById('timerProgress').className = 'timer-progress progress-report';
+                
+                // Add buttons
+                const endButton = createButton('終了', 'end-btn', goHome);
+                endButton.innerHTML = '<i class="fas fa-home"></i> 終了';
+                
+                const nextButton = createButton('次の発表者へ', 'next-btn', resetProgressTimer);
+                nextButton.innerHTML = '<i class="fas fa-forward"></i> 次の発表者へ';
+                
+                document.getElementById('timerButtons').appendChild(endButton);
+                document.getElementById('timerButtons').appendChild(nextButton);
+            } 
+            else if (mode === 'break') {
+                document.getElementById('timerTitle').textContent = '休憩(休めるだけ休め)';
+                document.getElementById('indicator').className = 'indicator blink-green';
+                document.getElementById('timerProgress').className = 'timer-progress progress-break';
+                
+                // Add buttons
+                const endButton = createButton('終了', 'end-btn', goHome);
+                endButton.innerHTML = '<i class="fas fa-home"></i> 終了';
+                document.getElementById('timerButtons').appendChild(endButton);
+            }
+            
+            // Start updating the timer
+            updateTimer();
+            updateProgressBar();
+            timer = setInterval(updateTimer, 1000);
+        }
+
+        function startQASession() {
+            clearInterval(timer);
+            cancelAnimationFrame(animationFrameId);
+            startTime = Math.floor(Date.now() / 1000);
+            targetTime = startTime + 30*60;
+            isOvertime = false;
+            isQAMode = true;
+            
+            document.getElementById('timerTitle').textContent = '質疑応答';
+            document.getElementById('indicator').className = 'indicator blink-blue';
+            document.getElementById('overtime').textContent = '';
+            document.getElementById('overtime').style.display = 'none';
+            document.getElementById('timerProgress').className = 'timer-progress progress-qa';
+            document.getElementById('timerProgress').style.transform = 'scaleX(1)';
+            
+            // Remove all buttons and add only the end button
+            document.getElementById('timerButtons').innerHTML = '';
+            const endButton = createButton('終了', 'end-btn', goHome);
+            endButton.innerHTML = '<i class="fas fa-home"></i> 終了';
+            document.getElementById('timerButtons').appendChild(endButton);
+            
+            // Restart the timer
+            updateTimer();
+            updateProgressBar();
+            timer = setInterval(updateTimer, 1000);
+        }
+
+        function resetProgressTimer() {
+            startTimer('progress', 20*60);
+        }
+
+        function goHome() {
+            clearInterval(timer);
+            cancelAnimationFrame(animationFrameId);
+            document.getElementById('homeScreen').style.display = 'grid';
+            document.getElementById('timerScreen').style.display = 'none';
+        }
+
+        function createButton(text, className, clickHandler) {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.className = className;
+            button.addEventListener('click', clickHandler);
+            return button;
+        }
+
+        function updateProgressBar() {
+            const currentTime = Math.floor(Date.now() / 1000);
+            let totalTime = targetTime - startTime;
+            let timeRemaining = targetTime - currentTime;
+            
+            if (timeRemaining > 0) {
+                let progress = timeRemaining / totalTime;
+                document.getElementById('timerProgress').style.transform = `scaleX(${progress})`;
+                animationFrameId = requestAnimationFrame(updateProgressBar);
+            } else {
+                document.getElementById('timerProgress').style.transform = 'scaleX(0)';
+            }
+        }
+
+        function updateTimer() {
+            const currentTime = Math.floor(Date.now() / 1000);
+            let timeRemaining = targetTime - currentTime;
+            
+            // Check if we need to switch the indicator color (30min mark for presentation mode)
+            if (timerMode === 'presentation' && !isQAMode && !isOvertime && timeRemaining <= 30*60) {
+                document.getElementById('indicator').className = 'indicator blink-red';
+            }
+            
+            // Check if time is up
+            if (timeRemaining <= 0) {
+                isOvertime = true;
+                timeRemaining = Math.abs(timeRemaining);
+                
+                // Format overtime display
+                const overtimeMinutes = Math.floor(timeRemaining / 60);
+                const overtimeSeconds = timeRemaining % 60;
+                document.getElementById('overtime').style.display = 'inline-block';
+                document.getElementById('overtime').textContent = 
+                    `${overtimeMinutes}分${overtimeSeconds}秒超過`;
+                
+                // Change indicator to red for overtime
+                if (timerMode === 'presentation' || timerMode === 'progress' || isQAMode) {
+                    document.getElementById('indicator').className = 'indicator blink-red';
+                }
+                
+                // Special case for break mode
+                if (timerMode === 'break' && document.getElementById('breakWarning').style.display !== 'block') {
+                    document.getElementById('breakWarning').style.display = 'block';
+                    document.getElementById('breakWarning').classList.add('explode-animation');
+                }
+            }
+            
+            // Calculate minutes and seconds for display
+            let displayTime;
+            if (isOvertime) {
+                const elapsedSeconds = currentTime - targetTime;
+                const minutes = Math.floor(elapsedSeconds / 60);
+                const seconds = elapsedSeconds % 60;
+                displayTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            } else {
+                const minutes = Math.floor(timeRemaining / 60);
+                const seconds = timeRemaining % 60;
+                displayTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+            
+            document.getElementById('timerDisplay').textContent = displayTime;
+        }
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>福田グループ DLSS</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @font-face {
+            font-family: 'TsukushiMaruGothicA';
+            src: local('筑紫丸ゴシックA');
+            font-weight: normal;
+        }
+
+        :root {
+            --primary-color: #FF9E43;
+            --secondary-color: #FF7D1A;
+            --accent-color: #2EC4B6;
+            --danger-color: #FF5252;
+            --blue-color: #4C9AFF;
+            --bg-color: #FFECD9;
+            --card-bg: rgba(255, 255, 255, 0.85);
+            --shadow-color: rgba(255, 158, 67, 0.2);
+            --text-color: #546E7A;
+            --heading-color: #37474F;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'TsukushiMaruGothicA', sans-serif;
+            background-color: var(--bg-color);
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23ff9e43' fill-opacity='0.1' fill-rule='evenodd'/%3E%3C/svg%3E");
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            transition: background-color 0.5s;
+        }
+
+        .header {
+            width: 100%;
+            padding: 20px 0;
+            text-align: center;
+            position: relative;
+        }
+
+        h1 {
+            color: var(--heading-color);
+            font-size: 32px;
+            margin: 0;
+            padding: 10px 0;
+            position: relative;
+            display: inline-block;
+        }
+
+        h1::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 50%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .home-screen {
+            display: grid;
+            gap: 25px;
+        }
+
+        .timer-screen {
+            display: none;
+            text-align: center;
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 15px 30px var(--shadow-color);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
+        }
+
+        .timer-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 25px var(--shadow-color);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .timer-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 5px;
+        }
+
+        .timer-card.presentation::before {
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+        }
+
+        .timer-card.progress::before {
+            background: linear-gradient(to right, var(--accent-color), #26A69A);
+        }
+
+        .timer-card.break::before {
+            background: linear-gradient(to right, var(--danger-color), #FF1744);
+        }
+
+        .timer-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px var(--shadow-color);
+        }
+
+        .card-icon {
+            font-size: 36px;
+            margin-bottom: 15px;
+        }
+
+        .presentation .card-icon {
+            color: var(--primary-color);
+        }
+
+        .progress .card-icon {
+            color: var(--accent-color);
+        }
+
+        .break .card-icon {
+            color: var(--danger-color);
+        }
+
+        .timer-card h2 {
+            margin: 0;
+            margin-bottom: 10px;
+            color: var(--heading-color);
+            font-size: 24px;
+        }
+
+        .timer-card p {
+            margin: 0;
+            margin-bottom: 20px;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+
+        button {
+            font-family: 'TsukushiMaruGothicA', sans-serif;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s;
+            padding: 12px 30px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .home-btn {
+            width: 100%;
+            padding: 15px;
+            color: white;
+        }
+
+        .presentation-btn {
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+            color: white;
+        }
+
+        .progress-btn {
+            background: linear-gradient(to right, var(--accent-color), #26A69A);
+            color: white;
+        }
+
+        .break-btn {
+            background: linear-gradient(to right, var(--danger-color), #FF1744);
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .timer-title {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: var(--heading-color);
+            position: relative;
+            display: inline-block;
+        }
+
+        .timer-display-container {
+            position: relative;
+            margin: 40px 0;
+        }
+
+        .timer-display {
+            font-size: 72px;
+            font-weight: bold;
+            color: var(--heading-color);
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 2px;
+        }
+
+        .timer-display::before,
+        .timer-display::after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            height: 3px;
+            width: 60px;
+            border-radius: 3px;
+        }
+
+        .timer-display::before {
+            top: -15px;
+            background: linear-gradient(to right, transparent, var(--primary-color), transparent);
+        }
+
+        .timer-display::after {
+            bottom: -15px;
+            background: linear-gradient(to right, transparent, var(--primary-color), transparent);
+        }
+
+        .timer-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 25px;
+        }
+
+        .timer-buttons button {
+            flex: 1;
+            max-width: 180px;
+        }
+
+        .end-btn {
+            background: linear-gradient(to right, var(--danger-color), #FF1744);
+            color: white;
+        }
+
+        .next-btn {
+            background: linear-gradient(to right, var(--accent-color), #26A69A);
+            color: white;
+        }
+
+        .qa-btn {
+            background: linear-gradient(to right, var(--blue-color), #2979FF);
+            color: white;
+        }
+
+        .indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            box-shadow: 0 0 10px currentColor;
+        }
+
+        .blink-orange {
+            background-color: var(--primary-color);
+            color: var(--primary-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        .blink-red {
+            background-color: var(--danger-color);
+            color: var(--danger-color);
+            animation: pulse 1s infinite;
+        }
+
+        .blink-blue {
+            background-color: var(--blue-color);
+            color: var(--blue-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        .blink-green {
+            background-color: var(--accent-color);
+            color: var(--accent-color);
+            animation: pulse 1.5s infinite;
+        }
+
+        .overtime {
+            color: var(--danger-color);
+            font-weight: bold;
+            background: rgba(255, 82, 82, 0.1);
+            border-radius: 50px;
+            padding: 5px 15px;
+            display: inline-block;
+            margin-top: 10px;
+            font-size: 18px;
+            animation: fadeIn 0.5s;
+        }
+
+        .break-warning-container {
+            position: relative;
+            height: 60px;
+            margin-top: 20px;
+        }
+
+        .break-warning {
+            color: var(--danger-color);
+            font-size: 24px;
+            font-weight: bold;
+            display: none;
+            background: rgba(255, 82, 82, 0.1);
+            border-radius: 10px;
+            padding: 10px 20px;
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: fit-content;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; box-shadow: 0 0 0 0 rgba(currentColor, 0.7); }
+            70% { opacity: 0.7; box-shadow: 0 0 0 10px rgba(currentColor, 0); }
+            100% { opacity: 1; box-shadow: 0 0 0 0 rgba(currentColor, 0); }
+        }
+
+        @keyframes explode {
+            0% {
+                transform: translate(-50%, -50%) scale(0.5);
+                opacity: 0;
+            }
+            50% {
+                transform: translate(-50%, -10%) scale(1.2);
+                opacity: 1;
+            }
+            100% {
+                transform: translate(-50%, 0) scale(1);
+                opacity: 1;
+            }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .explode-animation {
+            animation: explode 0.5s forwards;
+        }
+
+        .timer-progress {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 5px;
+            background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+            width: 100%;
+            transform-origin: left;
+            transition: transform 1s linear;
+        }
+
+        .progress-qa {
+            background: linear-gradient(to right, var(--blue-color), #2979FF);
+        }
+
+        .progress-report {
+            background: linear-gradient(to right, var(--accent-color), #26A69A);
+        }
+
+        .progress-break {
+            background: linear-gradient(to right, var(--danger-color), #FF1744);
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .timer-display {
+                font-size: 60px;
+            }
+            
+            .timer-buttons {
+                flex-direction: column;
+            }
+            
+            .timer-buttons button {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1> 福田グループ JC </h1>
+        <h2> - Discussion Leader Support System - </h2>
+    </div>
+    
+    <div class="container">
+        <div class="home-screen" id="homeScreen">
+            <div class="timer-card presentation">
+                <i class="fas fa-chalkboard-teacher card-icon"></i>
+                <h2>発表</h2>
+                <p>発表セッション用 (60分)</p>
+                <button class="presentation-btn" onclick="startTimer('presentation', 60*60)">
+                    <i class="fas fa-play"></i> スタート
+                </button>
+            </div>
+            
+            <div class="timer-card progress">
+                <i class="fas fa-tasks card-icon"></i>
+                <h2>進捗報告</h2>
+                <p>進捗報告セッション用 (20分)</p>
+                <button class="progress-btn" onclick="startTimer('progress', 20*60)">
+                    <i class="fas fa-play"></i> スタート
+                </button>
+            </div>
+            
+            <div class="timer-card break">
+                <i class="fas fa-coffee card-icon"></i>
+                <h2>休憩</h2>
+                <p>休めるだけ休め (10分)</p>
+                <button class="break-btn" onclick="startTimer('break', 10*60)">
+                    <i class="fas fa-play"></i> スタート
+                </button>
+            </div>
+        </div>
+
+        <div class="timer-screen" id="timerScreen">
+            <i class="indicator" id="indicator"></i>
+            <div class="timer-title" id="timerTitle"></div>
+            
+            <div class="timer-display-container">
+                <div class="timer-display" id="timerDisplay">00:00</div>
+            </div>
+            
+            <div class="overtime" id="overtime"></div>
+            
+            <div class="timer-buttons" id="timerButtons">
+                <!-- Buttons will be added dynamically -->
+            </div>
+            
+            <div class="break-warning-container">
+                <div class="break-warning" id="breakWarning">休み過ぎはよ動け</div>
+            </div>
+            
+            <div class="timer-progress" id="timerProgress"></div>
+        </div>
+    </div>
+
+    <script>
+        let timer;
+        let targetTime = 0;
+        let startTime = 0;
+        let timerMode = '';
+        let isOvertime = false;
+        let isQAMode = false;
+
+        function startTimer(mode, seconds) {
+            document.getElementById('homeScreen').style.display = 'none';
+            document.getElementById('timerScreen').style.display = 'block';
+            document.getElementById('timerButtons').innerHTML = '';
+            document.getElementById('overtime').textContent = '';
+            document.getElementById('breakWarning').style.display = 'none';
+            document.getElementById('breakWarning').classList.remove('explode-animation');
+            
+            // Reset variables
+            clearInterval(timer);
+            startTime = Math.floor(Date.now() / 1000);
+            targetTime = startTime + seconds;
+            timerMode = mode;
+            isOvertime = false;
+            isQAMode = false;
+            
+            // Set appropriate title and indicator
+            if (mode === 'presentation') {
+                document.getElementById('timerTitle').textContent = '発表';
+                document.getElementById('indicator').className = 'indicator blink-orange';
+                
+                // Add buttons
+                const endButton = createButton('終了', 'end-btn', goHome);
+                const qaButton = createButton('質疑応答に進む', 'qa-btn', startQASession);
+                
+                document.getElementById('timerButtons').appendChild(endButton);
+                document.getElementById('timerButtons').appendChild(qaButton);
+            } 
+            else if (mode === 'progress') {
+                document.getElementById('timerTitle').textContent = '進捗報告';
+                document.getElementById('indicator').className = 'indicator blink-green';
+                
+                // Add buttons
+                const endButton = createButton('終了', 'end-btn', goHome);
+                const nextButton = createButton('次の発表者へ', 'next-btn', resetProgressTimer);
+                
+                document.getElementById('timerButtons').appendChild(endButton);
+                document.getElementById('timerButtons').appendChild(nextButton);
+            } 
+            else if (mode === 'break') {
+                document.getElementById('timerTitle').textContent = '休憩(休めるだけ休め)';
+                document.getElementById('indicator').className = 'indicator blink-green';
+                
+                // Add buttons
+                const endButton = createButton('終了', 'end-btn', goHome);
+                document.getElementById('timerButtons').appendChild(endButton);
+            }
+            
+            // Start updating the timer
+            updateTimer();
+            timer = setInterval(updateTimer, 1000);
+        }
+
+        function startQASession() {
+            clearInterval(timer);
+            startTime = Math.floor(Date.now() / 1000);
+            targetTime = startTime + 30*60;
+            isOvertime = false;
+            isQAMode = true;
+            
+            document.getElementById('timerTitle').textContent = '質疑応答';
+            document.getElementById('indicator').className = 'indicator blink-blue';
+            document.getElementById('overtime').textContent = '';
+            
+            // Remove all buttons and add only the end button
+            document.getElementById('timerButtons').innerHTML = '';
+            const endButton = createButton('終了', 'end-btn', goHome);
+            document.getElementById('timerButtons').appendChild(endButton);
+            
+            // Restart the timer
+            updateTimer();
+            timer = setInterval(updateTimer, 1000);
+        }
+
+        function resetProgressTimer() {
+            startTimer('progress', 20*60);
+        }
+
+        function goHome() {
+            clearInterval(timer);
+            document.getElementById('homeScreen').style.display = 'flex';
+            document.getElementById('timerScreen').style.display = 'none';
+        }
+
+        function createButton(text, className, clickHandler) {
+            const button = document.createElement('button');
+            button.textContent = text;
+            button.className = className;
+            button.addEventListener('click', clickHandler);
+            return button;
+        }
+
+        function updateTimer() {
+            const currentTime = Math.floor(Date.now() / 1000);
+            let timeRemaining = targetTime - currentTime;
+            
+            // Check if we need to switch the indicator color (30min mark for presentation mode)
+            if (timerMode === 'presentation' && !isQAMode && !isOvertime && timeRemaining <= 30*60) {
+                document.getElementById('indicator').className = 'indicator blink-red';
+            }
+            
+            // Check if time is up
+            if (timeRemaining <= 0) {
+                isOvertime = true;
+                timeRemaining = Math.abs(timeRemaining);
+                
+                // Format overtime display
+                const overtimeMinutes = Math.floor(timeRemaining / 60);
+                const overtimeSeconds = timeRemaining % 60;
+                document.getElementById('overtime').textContent = 
+                    `${overtimeMinutes}分${overtimeSeconds}秒超過`;
+                
+                // Change indicator to red for overtime
+                if (timerMode === 'presentation' || timerMode === 'progress' || isQAMode) {
+                    document.getElementById('indicator').className = 'indicator blink-red';
+                }
+                
+                // Special case for break mode
+                if (timerMode === 'break' && !document.getElementById('breakWarning').style.display) {
+                    document.getElementById('breakWarning').style.display = 'block';
+                    document.getElementById('breakWarning').classList.add('explode-animation');
+                }
+            }
+            
+            // Calculate minutes and seconds for display
+            let displayTime;
+            if (isOvertime) {
+                const elapsedSeconds = currentTime - targetTime;
+                const minutes = Math.floor(elapsedSeconds / 60);
+                const seconds = elapsedSeconds % 60;
+                displayTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            } else {
+                const minutes = Math.floor(timeRemaining / 60);
+                const seconds = timeRemaining % 60;
+                displayTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+            
+            document.getElementById('timerDisplay').textContent = displayTime;
+        }
+    </script>
+</body>
+</html>
